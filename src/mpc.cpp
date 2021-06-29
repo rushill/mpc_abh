@@ -3,57 +3,80 @@
 #include "turtlesim/Pose.h"
 #include <cppad/cppad.hpp>
 #include <cppad/ipopt/solve.hpp>
-
-using CppAD::AD;
+#include <iostream>
 
 ros::Publisher pub_vel;
 geometry_msgs::Twist pub_twist;
 turtlesim::Pose pos1, pos2;
 
-void t1_callback(const turtlesim::Pose::ConstPtr& _pos1){
-
-    pos1 = *_pos1;
-    // assign the value of turtle1's pose to pos1
-}
-
-void t2_callback(const turtlesim::Pose::ConstPtr& _pos2){
-
-    pos2 = *_pos2;
-    // assign the value of turtle1's pose to pos1
-}
-
-void MPC(float , float);
 size_t N = 10;
 double dt = 0.1;
 
+void t1_callback(const turtlesim::Pose::ConstPtr& ppp);
+
+void t2_callback(const turtlesim::Pose::ConstPtr& _pos2);
+
+namespace {
+    using CppAD::AD;
+    using namespace std;
+
+    class FG_eval {
+    public:
+        typedef CPPAD_TESTVECTOR( AD<double> ) ADvector;
+        
+        
+        float goal_x, goal_y;
+        FG_eval(float x, float y){
+            goal_x=x;
+            goal_y=y;
+        }
+        
+        void operator()(ADvector& fg, const ADvector& x)
+        {   ADvector pose(3*N);
+            size_t v_start = 0;
+            size_t w_start = N -1;
+            size_t x_start = 0;
+            size_t y_start = N;
+            size_t t_start = 2*N - 1;
+
+
+            pose[x_start] = pos1.x;
+            pose[y_start] = pos1.y;
+            pose[t_start] = pos1.theta;
+            
+            fg[0]=0; 
+            for (size_t i=1; i<=N;++i){
+
+                pose[x_start+i]=pose[x_start+i-1]+x[v_start+i-1]*CppAD::cos(pose[t_start+i-1])*dt;
+                pose[y_start+i]=pose[y_start+i-1]+x[v_start+i-1]*CppAD::sin(pose[t_start+i-1])*dt;
+                pose[t_start+i]=pose[t_start+i-1]+x[w_start+i-1]*dt;
+
+                fg[0] += CppAD::pow((goal_x-pose[x_start+i]), 2);
+                fg[0] += CppAD::pow((goal_y-pose[y_start+i]), 2);
+
+                fg[1+i] = CppAD::pow((pos1.x-pose[x_start+i]), 2) + CppAD::pow((pos1.y-pose[y_start+i]), 2);
+
+            }
+            return;
+        }
+     };
+
+
+}
+
+void MPC(float , float);
+
+
 int main(int argc, char* argv[]){
-   
-
-
-
     ros::init(argc, argv, "mpc");
     float x, y;
-    std::cout<<"a";
-
     ros::NodeHandle t_sim;
-   
-
     ros::Rate rate(2);
-
-
     pub_vel = t_sim.advertise<geometry_msgs::Twist>("/turtle2/cmd_vel", 1000);
-
-
     ros::Subscriber t1 = t_sim.subscribe("/turtle1/pose", 1000, t1_callback);
-
-
+    pub_twist.linear.x=1;
+    pub_vel.publish(pub_twist);
     ros::Subscriber t2 = t_sim.subscribe("/turtle2/pose", 1000, t2_callback);
-
-
-    rate.sleep();
-
-
-    ros::spin();
 
     char *again;
     do{
@@ -76,6 +99,7 @@ void MPC(float goal_x, float goal_y){
     pub_twist.angular.y = 0;
     pub_twist.angular.z = 0;
     float velocity = 0;
+    
 
 
     size_t v_start = 0;
@@ -84,41 +108,7 @@ void MPC(float goal_x, float goal_y){
     size_t y_start = x_start + N;
     size_t t_start = y_start + N - 1;
 
-    class FG_eval {
-    public:
-        float goal_x, goal_y;
-        FG_eval(float x, float y){
-            goal_x=x;
-            goal_y=y;
-        }
-        typedef CPPAD_TESTVECTOR( AD<double> ) ADvector;
-        void operator()(ADvector& fg, const ADvector& x)
-        {   
-            size_t v_start = 0;
-            size_t w_start = v_start + N -1;
-            size_t x_start = 0;
-            size_t y_start = x_start + N;
-            size_t t_start = y_start + N - 1;
-            ADvector pose(3*N);
-            pose[x_start] = pos1.x;
-            pose[y_start] = pos1.y;
-            pose[t_start] = pos1.theta;
-            fg[0]=0; 
-            for (size_t i=0; i<N;++i){
-
-                pose[x_start+i]=pose[x_start+i-1]+x[v_start+i-1]*CppAD::cos(pose[t_start+i-1])*dt;
-                pose[y_start+i]=pose[y_start+i-1]+x[v_start+i-1]*CppAD::sin(pose[t_start+i-1])*dt;
-                pose[t_start+i]=pose[t_start+i-1]+x[w_start+i-1]*dt;
-
-                fg[0] += CppAD::pow((goal_x-pose[x_start+i]), 2);
-                fg[0] += CppAD::pow((goal_y-pose[y_start+i]), 2);
-
-                fg[1+i] = CppAD::pow((pos1.x-pose[x_start+i]), 2) + CppAD::pow((pos1.y-pose[y_start+i]), 2);
-
-            }
-            return;
-        }
-     };
+    
     
     typedef CPPAD_TESTVECTOR( double ) Dvector;
     size_t nx=2*N;
@@ -177,6 +167,16 @@ void MPC(float goal_x, float goal_y){
         pub_vel.publish(pub_twist);
 
     }while(solution.obj_value>=0.01);
-
+    
 }
- 
+void t1_callback(const turtlesim::Pose::ConstPtr& ppp){
+
+    pos1 = *ppp;
+    // assign the value of turtle1's pose to pos1
+}
+
+void t2_callback(const turtlesim::Pose::ConstPtr& ppp){
+
+    pos2 = *ppp;
+    // assign the value of turtle1's pose to pos1
+}

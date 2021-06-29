@@ -233,3 +233,8 @@ target_link_libraries(test2 ${catkin_LIBRARIES} ipopt)
 
 add_dependencies(test2 ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
+add_executable(rand src/rand.cpp )
+target_link_libraries(rand ${catkin_LIBRARIES} ipopt)
+
+add_dependencies(rand ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
