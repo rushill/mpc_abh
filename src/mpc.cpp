@@ -98,7 +98,7 @@ int main(int argc, char* argv[]){
     
    
 
-    char *again;
+    char again;
     do{
         
         std::cout<<"Enter X:\n";
@@ -109,7 +109,7 @@ int main(int argc, char* argv[]){
         std::cout<<"\nAgain? (y/n) \n";
         std::cin>>again;
         
-    }while(again=="y");
+    }while(again=='y');
     ros::waitForShutdown();
 }
 
